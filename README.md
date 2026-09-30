@@ -196,6 +196,11 @@ UI corresponds to a real degree value you could send to a servo.
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest tests/ -q
 ```
 
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` is needed on machines with ROS 2 sourced:
+ROS installs a `launch_testing` pytest plugin that imports `osrf_pycommon`,
+which is not present outside a full ROS desktop install. Unrelated to this
+project.
+
 Covers the curl estimator against synthetic straight/curled chains, gesture
 disambiguation, forward kinematics (fingertips must travel toward the palm as
 the finger closes), left/right mirroring, the projection maths, and the One
