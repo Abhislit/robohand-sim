@@ -1,0 +1,56 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "robohand (camera)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/robohand/__main__.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": [],
+      "env": { "PYTHONPATH": "${workspaceFolder}" }
+    },
+    {
+      "name": "robohand (demo - no camera)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/robohand/__main__.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["--demo"],
+      "env": { "PYTHONPATH": "${workspaceFolder}" }
+    },
+    {
+      "name": "robohand (list cameras)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/robohand/__main__.py",
+      "console": "integratedTerminal",
+      "args": ["--list-cameras"],
+      "env": { "PYTHONPATH": "${workspaceFolder}" }
+    },
+    {
+      "name": "run tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["tests", "-q"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"
+      }
+    },
+    {
+      "name": "render pose sheet",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/render_poses.py",
+      "console": "integratedTerminal",
+      "args": [],
+      "env": { "PYTHONPATH": "${workspaceFolder}" }
+    }
+  ]
+}

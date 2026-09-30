@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+captures/
+tools/out/*
+!tools/out/pose_sheet.png
+*.mp4
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+*.egg-info/

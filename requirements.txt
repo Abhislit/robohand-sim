@@ -1,0 +1,12 @@
+# robohand dependencies.
+#
+# IMPORTANT: mediapipe publishes wheels for CPython 3.9-3.12 only. This project
+# is set up with a Python 3.12 virtualenv on purpose - on Python 3.13/3.14 the
+# install will fail to find a compatible mediapipe wheel.
+
+mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4
+
+# dev only (optional - not needed to run the app)
+pytest>=8.0
