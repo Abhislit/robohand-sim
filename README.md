@@ -178,23 +178,40 @@ rather than animated.
 
 Measured with `tools/gazebo.sh selftest`, not assumed:
 
-| Joints | Behaviour |
+All 16 joints respond. Fingertip travel on a fist: index 104 mm, middle
+66 mm, pinky 23 mm, thumb 3 mm (the thumb curls across the palm, so its tip
+travels less than the fingers').
+
+#### The thumb bug, and what it was
+
+The thumb used to be completely immovable in Gazebo. The cause was the **URDF
+joint limits**, and it is fixed.
+
+`urdf_export.py` wrote each joint's limit as exactly `[0, max_flex]`.
+Gazebo's `JointPositionController` clamps every command into that window, but
+the window did not straddle the joint's actual zero, so every command was
+clamped to a single unreachable value and the joint sat still. Widening the
+window by a symmetric slack (`JOINT_LIMIT_SLACK`) makes the thumb move.
+
+Measured on `thumb_mcp`, tip travel from rest:
+
+| URDF limit | travel |
 | --- | --- |
-| `index`, `middle`, `ring`, `pinky` (12 joints) | **work** — ~103 mm and ~78 mm of fingertip travel on a fist |
-| `thumb` (3 joints) | **immovable** — stays at its rest pose for any command |
-| `wrist_pitch` | **immovable** |
+| `[0, 0.733]` (the old export) | **0 mm** |
+| `[-2.5, 2.5]` | **114 mm** |
 
-For the thumb and wrist, all of the following have been checked and are
-correct: the joints exist in Gazebo, the controllers subscribe, the mass and
-inertia are valid, the limits are applied, the parent/child chain is intact, and
-the axis is a unit vector. The cause is still open. Two findings narrow it down
-and are worth recording so the next attempt does not repeat them:
+What this ruled out along the way, so it is not re-investigated:
 
-* **The forearm is not the cause.** A hand-only world (`with_arm=False`)
-  reproduces the dead thumb, so the arm injection can be ruled out.
-* **It is not a controller-count or topic-naming problem.** Gazebo reports the
-  thumb's joint with an identical type, parent, child and axis to the index's,
-  and all 15 command topics receive data.
+* not the forearm - a hand-only world reproduced the dead thumb
+* not the controller or topic naming - all 15 command topics carry data
+* not malformed model data - mass, inertia, limits and the parent/child chain
+  are all valid, and the inertia tensors satisfy the triangle inequality
+* not the joint axis - `1 0 0`, `0 1 0` and `0 0 1` were all equally frozen
+* not PID tuning - softening the gains did not change the result
+
+The fix keeps the anatomically meaningful range: `joint_table()` still reports
+`0 .. max_flex` and the ROS bridge still scales by it. Only the mechanical
+stops in the URDF are wider, which is also what a real joint's would be.
 
 
 

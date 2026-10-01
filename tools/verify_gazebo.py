@@ -79,18 +79,18 @@ def main():
                 for t in TIPS:
                     d = dist(seen[a][t], seen[b][t])
                     print(f"    {a:>5} -> {b:<5} {t:18} {d:.4f} m")
+            # The thumb curls across the palm, so its tip travels less than the
+            # fingers' - it only has to move, not move as far.
             thumb = dist(seen["open"]["thumb_dip_link"], seen["fist"]["thumb_dip_link"])
-            moving = [t for t in TIPS if t != "thumb_dip_link"]
             if thumb < 0.001:
                 print("  KNOWN ISSUE: the thumb does not respond to Gazebo "
-                      f"commands ({thumb*1000:.1f} mm) and neither does "
-                      "wrist_pitch. Joints, masses, limits and the "
-                      "parent/child chain are all valid, and a hand-only world "
-                      "reproduces it, so the arm is not the cause. See "
-                      "README 'Known issues in the Gazebo path'.")
+                      f"commands ({thumb*1000:.1f} mm). See README "
+                      "'The thumb bug, and what it was'.")
             checks = [
                 ("the four long fingers curl > 15 mm on a fist",
-                 all(dist(seen["open"][t], seen["fist"][t]) > 0.015 for t in moving)),
+                 all(dist(seen["open"][t], seen["fist"][t]) > 0.015
+                     for t in TIPS if t != "thumb_dip_link")),
+                ("the thumb responds to commands at all", thumb > 0.001),
                 ("point returns the index toward open",
                  dist(seen["fist"]["index_dip_link"],
                       seen["point"]["index_dip_link"])

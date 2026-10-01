@@ -119,13 +119,29 @@ def test_every_link_has_inertial_mass_and_geometry():
         assert link.find("visual") is not None, f"{link.get('name')} is invisible"
 
 
-def test_joint_limits_match_the_rig():
+def test_joint_limits_bracket_the_working_range():
+    """The URDF limit must *contain* [0, max_flex] and add symmetric slack.
+
+    It previously emitted exactly [0, max_flex], which in Gazebo left the thumb
+    unable to move at all (0 mm of travel). The controller clamps every command
+    to the limit window, so a window that does not straddle the joint's actual
+    zero leaves it frozen no matter what it is told. The working range itself
+    is unchanged and is still what `joint_table()` reports.
+    """
+    from robohand.urdf_export import JOINT_LIMIT_SLACK
+
     joints = _parse(build_urdf())
-    for name, lo, hi, default in joint_table():
+    for name, lo, hi, _default in joint_table():
         j = joints[name]
-        assert j["lower"] == pytest.approx(lo, abs=1e-9)
-        assert j["upper"] == pytest.approx(hi, abs=1e-9)
-        # Limits must be the rig's real anatomical maxima, not placeholders.
+        assert j["lower"] <= lo + 1e-9, f"{name} lower excludes the working range"
+        assert j["upper"] >= hi - 1e-9, f"{name} upper excludes the working range"
+        assert j["lower"] == pytest.approx(-JOINT_LIMIT_SLACK, abs=1e-9)
+        assert j["upper"] == pytest.approx(hi + JOINT_LIMIT_SLACK, abs=1e-9)
+        assert JOINT_LIMIT_SLACK >= max(hi for _, _, hi, _ in joint_table())
+    # joint_table() must still advertise the real anatomical maxima, since the
+    # bridge scales commands by it.
+    for name, lo, hi, _ in joint_table():
+        assert lo == 0.0
         assert 0.2 < hi < math.radians(130)
 
 
@@ -139,8 +155,8 @@ def test_joint_axes_are_unit_and_flexion_about_x():
             assert j["type"] == "revolute"
             assert np.isclose(float(np.linalg.norm(j["axis"])), 1.0, atol=1e-9)
             assert j["axis"] == expect, f"{hand} {name} axis {j['axis']}"
-            # Limits stay positive-going for both hands.
-            assert j["lower"] == pytest.approx(0.0, abs=1e-9)
+            # The window is symmetric about the working range for both hands.
+            assert j["lower"] < 0.0 < j["upper"]
 
 
 # --- the important part: does it move like the renderer? --------------------

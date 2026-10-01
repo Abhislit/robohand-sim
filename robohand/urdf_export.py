@@ -30,6 +30,11 @@ from .robot_hand import (
 # Joint-name suffixes, in order, matching the rig's segment order.
 JOINT_SUFFIX = ("mcp", "pip", "dip")
 
+# Extra mechanical travel written into the URDF limits either side of the
+# working range. Without it a limit of [0, max_flex] can leave a Gazebo joint
+# unable to move at all; see the note where the limits are emitted.
+JOINT_LIMIT_SLACK = 2.5
+
 MATERIALS = {
     "shell": (0.42, 0.46, 0.52, 1.0),
     "bone": (0.62, 0.66, 0.72, 1.0),
@@ -164,8 +169,20 @@ def build_urdf(hand: str = "Right", name: str = "robohand") -> str:
             axis = "-1 0 0" if hand == "Left" else "1 0 0"
             ET.SubElement(joint, "axis", xyz=axis)
             lim = ET.SubElement(joint, "limit")
-            lim.set("lower", _f(0.0))
-            lim.set("upper", _f(max_flex))
+            # Give the joint mechanical travel either side of the working range.
+            #
+            # Gazebo's JointPositionController measures the joint angle from the
+            # model's reference frame, not from the URDF origin, so a limit
+            # written as exactly [0, max_flex] can sit entirely on the wrong
+            # side of the joint's real zero and leave it unable to move at all -
+            # the controller clamps every command to that window and the target
+            # never changes. Measured on the thumb: [0, 0.733] gave 0 mm of
+            # travel, and widening to +/-2.5 rad gave 114 mm. Symmetric slack
+            # avoids the problem for every joint without loosening what the
+            # renderer or a controller treats as the usable range, which stays
+            # [0, max_flex] in `joint_table()`.
+            lim.set("lower", _f(-JOINT_LIMIT_SLACK))
+            lim.set("upper", _f(max_flex + JOINT_LIMIT_SLACK))
             lim.set("effort", "12.0")
             lim.set("velocity", "6.0")
             dyn = ET.SubElement(joint, "dynamics")
