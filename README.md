@@ -157,7 +157,46 @@ It launches without RViz, samples `/joint_states` six times, and asserts that
 15 joints are published, that they actually travel, and that
 `robot_state_publisher` turns them into 15 TF transforms.
 
-### What the URDF is checked against
+### Gazebo
+
+```bash
+tools/gazebo.sh start          # build the world and launch it with the GUI
+tools/gazebo.sh status         # what is running, error count, control topics
+tools/gazebo.sh selftest       # verify the simulated fingers actually move
+tools/gazebo.sh stop           # stops only robohand's Gazebo
+```
+
+`start headless` runs the server with no window, which is what the tests use.
+`stop` is deliberately narrow: any Gazebo whose world file does not contain
+`robohand` is left running, so a blackbox replay on the same machine survives.
+
+The world adds a forearm and wrist below the hand, plus 16
+`JointPositionController` PIDs, so the fingers are physically driven in Dart
+rather than animated.
+
+#### Known issues in the Gazebo path
+
+Measured with `tools/gazebo.sh selftest`, not assumed:
+
+| Joints | Behaviour |
+| --- | --- |
+| `index`, `middle`, `ring`, `pinky` (12 joints) | **work** — ~103 mm and ~78 mm of fingertip travel on a fist |
+| `thumb` (3 joints) | **immovable** — stays at its rest pose for any command |
+| `wrist_pitch` | **immovable** |
+
+For the thumb and wrist, all of the following have been checked and are
+correct: the joints exist in Gazebo, the controllers subscribe, the mass and
+inertia are valid, the limits are applied, the parent/child chain is intact, and
+the axis is a unit vector. The cause is still open. Two findings narrow it down
+and are worth recording so the next attempt does not repeat them:
+
+* **The forearm is not the cause.** A hand-only world (`with_arm=False`)
+  reproduces the dead thumb, so the arm injection can be ruled out.
+* **It is not a controller-count or topic-naming problem.** Gazebo reports the
+  thumb's joint with an identical type, parent, child and axis to the index's,
+  and all 15 command topics receive data.
+
+
 
 `tests/test_urdf.py` re-implements URDF forward kinematics independently,
 parses the generated file, and asserts the link positions match

@@ -104,7 +104,10 @@ def _arm_links() -> tuple[str, str]:
         </visual>
       </link>
       <link name="wrist_link">
-        <pose>0 -0.128 0 0 0 0</pose>
+        <!-- Pose must be identity: placement of a jointed link comes from its
+             joint's <pose>, which is relative to the parent. Giving it an
+             absolute pose here too puts the link in two places at once. -->
+        <pose>0 0 0 0 0 0</pose>
         <inertial>
           <mass>0.22</mass>
           <inertia>
