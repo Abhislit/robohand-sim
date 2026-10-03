@@ -74,15 +74,38 @@ def _arm_links() -> tuple[str, str]:
     only ever join two frames inside the same model, so a separate forearm model
     cannot be attached with a joint - and nesting the hand inside an arm model
     would rename the joint-controller topics. Keeping one model means the
-    15 finger joints keep clean `/model/robohand_Right/joint/...` topics and the
-    forearm simply hangs off the bottom.
+    15 finger joints keep clean `/model/robohand_Right/joint/...` topics.
 
-    Chain:  forearm_link --(wrist_pitch, revolute)--> wrist_link
-                                     --(fixed)--> base_link (the hand)
+    Chain, from the anchored end:
+
+        world --(forearm_anchor, fixed)--> forearm_link
+             --(wrist_pitch, revolute)--> wrist_link
+             --(wrist_to_hand, fixed)--> base_link (the hand)
+
+    Two SDF details drive this layout.
+
+    First, an SDF `<joint><pose>` is expressed in the **child** link frame, not
+    the parent. Writing the spacing into the joint poses therefore does not
+    space the links out - it silently leaves every link stacked at the model
+    origin with the wrist sphere buried inside the palm. The offsets live in
+    the *link* poses below and the joint poses are left at identity, which is
+    unambiguous.
+
+    Second, the arm has to grow along +y. The palm sits at y=-0.046 and the
+    fingers run further to -y, so an arm extending the other way ends up inside
+    the hand.
+
+    Note the hand is a child of the wrist, not the other way round. The anchor
+    has to go on the far end from the hand: a fixed joint is a *weld* in DART,
+    so welding `base_link` to the world freezes the entire connected island,
+    wrist included. See `forearm_anchor` below.
     """
     links = """
       <link name="forearm_link">
-        <pose>0 -0.245 0 0 0 0</pose>
+        <!-- Above the wrist (+y). The palm sits at y=-0.046 and the fingers run
+             further to -y, so the arm has to grow the other way or it ends up
+             inside the hand. -->
+        <pose>0 0.245 0 0 0 0</pose>
         <inertial>
           <pose>0 0 0 0 0 0</pose>
           <mass>1.6</mass>
@@ -92,9 +115,11 @@ def _arm_links() -> tuple[str, str]:
           </inertia>
         </inertial>
         <collision name="forearm_collision">
+          <pose>0 0.11 0 0 0 0</pose>
           <geometry><cylinder><radius>0.033</radius><length>0.22</length></cylinder></geometry>
         </collision>
         <visual name="forearm_visual">
+          <pose>0 0.11 0 0 0 0</pose>
           <geometry><cylinder><radius>0.033</radius><length>0.22</length></cylinder></geometry>
           <material>
             <ambient>0.30 0.33 0.38 1</ambient>
@@ -104,10 +129,7 @@ def _arm_links() -> tuple[str, str]:
         </visual>
       </link>
       <link name="wrist_link">
-        <!-- Pose must be identity: placement of a jointed link comes from its
-             joint's <pose>, which is relative to the parent. Giving it an
-             absolute pose here too puts the link in two places at once. -->
-        <pose>0 0 0 0 0 0</pose>
+        <pose>0 0.117 0 0 0 0</pose>
         <inertial>
           <mass>0.22</mass>
           <inertia>
@@ -115,9 +137,9 @@ def _arm_links() -> tuple[str, str]:
             <iyy>0.000116</iyy><iyz>0</iyz><izz>0.000116</izz>
           </inertia>
         </inertial>
-        <collision name="wrist_collision">
-          <geometry><sphere><radius>0.028</radius></sphere></geometry>
-        </collision>
+        <!-- No collision on the wrist ball. It sits flush against the palm
+             edge, and a sphere-vs-box contact straddling the pitch axis just
+             locks the joint; the forearm and fingers still collide normally. -->
         <visual name="wrist_visual">
           <geometry><sphere><radius>0.028</radius></sphere></geometry>
           <material>
@@ -128,16 +150,38 @@ def _arm_links() -> tuple[str, str]:
       </link>
 """
     joints = """
+      <!-- The revolute joint has to sit BETWEEN the forearm and the hand for
+           the wrist to do anything. Anything that leaves the hand outside the
+           revolute's subtree just spins the empty wrist sphere.
+
+           The chain therefore reads from the anchored end:
+             world -> forearm_link -> wrist_link -> base_link (hand)
+           wrist_pitch is parent forearm_link, child wrist_link, and base_link
+           is welded to wrist_link just above the knuckles, so the whole hand
+           swings when the pitch axis turns.
+
+           The chain deliberately runs wrist -> base_link (not base_link ->
+           wrist) because a *fixed* joint is a weld joint in DART. Welding the
+           hand to the world would freeze the entire connected island, wrist
+           included, and the pitch axis would do nothing. Only the anchored end
+           may be welded. -->
       <joint name="wrist_pitch" type="revolute">
         <parent>forearm_link</parent>
         <child>wrist_link</child>
-        <pose>0 -0.128 0 0 0 0</pose>
+        <!-- No <pose> here on purpose. An SDF joint pose is expressed in the
+             CHILD link frame, not the parent, so putting the spacing in the
+             joint silently leaves every link stacked at the model origin with
+             the wrist sphere buried inside the palm. Link poses below are
+             relative and unambiguous, so the offsets live there. -->
         <axis>
           <xyz>1 0 0</xyz>
           <!-- limit and dynamics belong INSIDE <axis> per the SDF spec; as
-               direct children of <joint> sdformat drops them with a warning. -->
+               direct children of <joint> sdformat drops them with a warning.
+               The window is symmetric and generous for the same reason as the
+               finger joints: a window that does not straddle the joint's zero
+               leaves a position controller unable to move it at all. -->
           <limit>
-            <lower>-1.15</lower><upper>1.15</upper>
+            <lower>-3.6</lower><upper>3.6</upper>
             <effort>90</effort><velocity>2.5</velocity>
           </limit>
           <dynamics><damping>0.4</damping><friction>0.2</friction></dynamics>
@@ -146,9 +190,12 @@ def _arm_links() -> tuple[str, str]:
       <joint name="wrist_to_hand" type="fixed">
         <parent>wrist_link</parent>
         <child>base_link</child>
-        <pose>0 0 0 0 0 0</pose>
       </joint>
-"""
+      <joint name="forearm_anchor" type="fixed">
+        <parent>world</parent>
+        <child>forearm_link</child>
+      </joint>
+    """
     return links, joints
 
 
@@ -232,6 +279,10 @@ def build_world(
     <model name="ground_plane">
       <static>true</static>
       <link name="link">
+        <!-- The floor sits well below the origin. At z=0 the plane cuts through
+             the palm (z -0.0145..+0.0145), so physics pushes the hand back out
+             and every joint is left jammed against the floor. -->
+        <pose>0 0 -0.45 0 0 0</pose>
         <collision name="collision">
           <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
         </collision>
@@ -277,6 +328,7 @@ def build_world(
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
+    <gravity>0 0 -9.81</gravity>
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>

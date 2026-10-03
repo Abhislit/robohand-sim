@@ -176,16 +176,49 @@ rather than animated.
 
 #### Known issues in the Gazebo path
 
-Measured with `tools/gazebo.sh selftest`, not assumed:
+Measured with `tools/gazebo.sh selftest`, not assumed.
 
-All 16 joints respond. Fingertip travel on a fist: index 104 mm, middle
-66 mm, pinky 23 mm, thumb 3 mm (the thumb curls across the palm, so its tip
+The four long fingers work. Fingertip travel on a fist: index ~18 mm, middle
+and pinky similar, thumb ~3 mm (the thumb curls across the palm, so its tip
 travels less than the fingers').
+
+Two things are **broken right now**, and `tools/gazebo.sh selftest` fails
+because of them. Both are checked automatically so they cannot regress
+silently into looking fine:
+
+* **The thumb barely moves in Gazebo** (~0.3 mm). The URDF limit fix described
+  below did resolve this once, but the thumb is not responding in the current
+  world, so treat the earlier table as history rather than current behaviour.
+* **The wrist does not articulate.** `wrist_pitch` accepts commands - the
+  `JointPositionController` is loaded, the command topic is live, and the
+  publisher reports all 16 joints streaming - but the hand does not move
+  (0.5 mm at the fingertip). Do not assume this is fixed.
+
+What *is* fixed, and was the actual cause of the sim looking broken:
+
+* **The hand no longer falls over.** The model used to be a free body, so
+  gravity toppled it and it tumbled out of view within seconds. It is now
+  anchored to the world at the forearm, which is what a real rig bolted to a
+  stand looks like.
+* **The ground plane no longer intersects the palm.** At `z=0` the plane cut
+  straight through the hand (which spans `z -0.0145..+0.0145`), so physics
+  shoved the hand back out and jammed the joints. The floor is now at
+  `z=-0.45`.
+* **The arm links are correctly spaced.** An SDF `<joint><pose>` is expressed
+  in the **child** link frame, not the parent. The offsets were being written
+  there, which silently left every link stacked at the model origin with the
+  wrist sphere buried inside the palm. The spacing now lives in the link poses.
+* **A broken build fails loudly.** `tools/gazebo.sh build` generates to a temp
+  file, re-parses it, and only then moves it into place. A generator that
+  raises used to leave a 0-byte world behind, and `gz sim` then failed with a
+  bare `Error parsing XML ... EMPTY_DOCUMENT` and no useful context.
 
 #### The thumb bug, and what it was
 
-The thumb used to be completely immovable in Gazebo. The cause was the **URDF
-joint limits**, and it is fixed.
+The thumb used to be completely immovable in Gazebo. One cause was the **URDF
+joint limits**, and widening them did fix it at the time. The thumb is
+currently unresponsive again for a reason that has not been found, so this
+section records the first fix rather than claiming the thumb works.
 
 `urdf_export.py` wrote each joint's limit as exactly `[0, max_flex]`.
 Gazebo's `JointPositionController` clamps every command into that window, but

@@ -104,6 +104,38 @@ def main():
             for label, passed in checks:
                 print(f"  {'PASS' if passed else 'FAIL'}  {label}")
                 ok = ok and passed
+
+        # --- wrist sweep ------------------------------------------------
+        # The wrist is checked separately from the finger poses because it
+        # needs the arm anchored, and because a wrist that silently fails to
+        # articulate looks identical to a wrist that is merely at its rest
+        # angle. Measured on the fingertip, since that is what a user sees.
+        print("=== wrist sweep ===")
+        wrist_seen = {}
+        for name, angle in (("flex", 1.0), ("neutral", 0.0), ("extend", -1.0)):
+            for _ in range(120):                   # hold ~4s for the PID
+                bridge.send({f: 0.05 for f in FINGERS}, wrist=angle)
+                time.sleep(0.03)
+            time.sleep(2.0)
+            wrist_seen[name] = link_positions()
+            print(f"  {name}: captured")
+
+        tip = "index_dip_link"
+        have_tip = all(tip in wrist_seen[n] for n in wrist_seen)
+        if have_tip:
+            flex = dist(wrist_seen["neutral"][tip], wrist_seen["flex"][tip])
+            ext = dist(wrist_seen["neutral"][tip], wrist_seen["extend"][tip])
+            print(f"  travel flex {flex*1000:.1f} mm, extend {ext*1000:.1f} mm")
+            wrist_ok = flex > 0.01
+        else:
+            print(f"  FAIL  {tip} missing from the wrist sweep")
+            wrist_ok = False
+        for label, passed in [
+            (f"wrist flexes the hand ({'' if not have_tip else f'{flex*1000:.0f} mm'})",
+             wrist_ok),
+        ]:
+            print(f"  {'PASS' if passed else 'FAIL'}  {label}")
+            ok = ok and passed
     finally:
         bridge.stop()
         print("=== publisher stopped ===")

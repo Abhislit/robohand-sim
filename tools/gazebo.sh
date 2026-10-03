@@ -27,18 +27,35 @@ ours() {   # true if this gz-sim-main is serving one of our worlds
 
 build_world() {
   mkdir -p "$WORLD_DIR"
-  "$PY" - "$HAND" "$WORLD_SDF" <<'PY'
+  # Generate to a temp file, re-parse it, and only then move it into place, so
+  # a generator that raises can never leave a 0-byte world behind for gz sim to
+  # choke on.
+  local tmp="$WORLD_SDF.tmp"
+  if ! "$PY" - "$HAND" "$tmp" <<'PY'
 import sys
+import xml.etree.ElementTree as ET
 from robohand.gazebo_world import build_world
+
 hand, out = sys.argv[1], sys.argv[2]
-open(out, "w").write(build_world(hand, with_arm=True))
-print(f"wrote {out}")
+xml = build_world(hand, with_arm=True)
+ET.fromstring(xml)                     # fail loudly on a malformed SDF
+with open(out, "w") as fh:
+    fh.write(xml)
+print(f"wrote {out} ({len(xml)} bytes)")
 PY
+  then
+    echo "ERROR: world generation failed; leaving $WORLD_SDF untouched" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  mv "$tmp" "$WORLD_SDF"
 }
 
 start() {
   local mode="${1:-gui}"
-  [ -f "$WORLD_SDF" ] || build_world
+  # Rebuild when missing or empty: a 0-byte world file makes gz sim fail with
+  # a bare "Error parsing XML ... EMPTY_DOCUMENT" and no useful context.
+  [ -s "$WORLD_SDF" ] || build_world || return 1
   # shellcheck disable=SC1090
   source "$ROS_SETUP" >/dev/null 2>&1
   if [ "$mode" = "headless" ]; then
